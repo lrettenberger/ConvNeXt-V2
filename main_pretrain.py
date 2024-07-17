@@ -320,7 +320,11 @@ def main(args):
             if val_loss < top_5_losses[0][1]:
                 checkpoint_path = utils.save_model_val_loss(args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                                                             loss_scaler=loss_scaler, epoch=epoch,val_loss=val_loss)
-                os.remove(top_5_losses[0][2])
+                if os.path.exists(top_5_losses[0][2]):
+                    try:
+                        os.remove(top_5_losses[0][2])
+                    except FileNotFoundError:
+                        print('File not found for deletion woopsi!')
                 top_5_losses[0] = (epoch, val_loss,checkpoint_path)
                 top_5_losses.sort(key=lambda x: x[1], reverse=True)
         if args.output_dir and args.save_ckpt:
