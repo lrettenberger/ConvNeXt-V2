@@ -243,20 +243,20 @@ class FCMAE(nn.Module):
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
 
         # regularization terms
-        l2_reg = None
-        for name,W in self.named_parameters():
-            if not W.requires_grad or 'encoder' not in name:
-                continue
-            if l2_reg is None:
-                l2_reg = W.norm(2)
-            else:
-                l2_reg = l2_reg + W.norm(2)
-        wandb.log({
-            'l2_reg':(l2_reg*0.0000002),
-            'loss: loss':loss
-        })
-        total_loss = loss + (l2_reg*0.0000002)
-        return total_loss
+        # l2_reg = None
+        # for name,W in self.named_parameters():
+        #     if not W.requires_grad or 'encoder' not in name:
+        #         continue
+        #     if l2_reg is None:
+        #         l2_reg = W.norm(2)
+        #     else:
+        #         l2_reg = l2_reg + W.norm(2)
+        # wandb.log({
+        #     'l2_reg':(l2_reg*0.0000002),
+        #     'loss: loss':loss
+        # })
+        # total_loss = loss + (l2_reg*0.0000002)
+        return loss
 
     def forward(self, imgs, labels=None, mask_ratio=0.6):
         x, mask = self.forward_encoder(imgs, mask_ratio)

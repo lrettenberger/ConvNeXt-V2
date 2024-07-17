@@ -54,7 +54,7 @@ def get_args_parser():
                     help='Convnet (for debugging)')
     parser.add_argument('--batch_size', default=10, type=int,
                         help='Per GPU batch size')
-    parser.add_argument('--epochs', default=5000, type=int)
+    parser.add_argument('--epochs', default=10000, type=int)
     parser.add_argument('--warmup_epochs', type=int, default=40, metavar='N',
                         help='epochs to warmup LR')
     parser.add_argument('--update_freq', default=8, type=int,
@@ -85,7 +85,7 @@ def get_args_parser():
                         help='weight decay (default: 0.05)')
     parser.add_argument('--lr', type=float, default=None, metavar='LR',
                         help='learning rate (absolute lr)')
-    parser.add_argument('--blr', type=float, default=1.5e-3, metavar='LR',
+    parser.add_argument('--blr', type=float, default=1.5e-4, metavar='LR',
                         help='base learning rate: absolute_lr = base_lr * total_batch_size / 256')
     parser.add_argument('--min_lr', type=float, default=0., metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0')
