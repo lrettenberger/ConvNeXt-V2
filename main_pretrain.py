@@ -52,12 +52,12 @@ def get_args_parser():
                     help='If training is on horeka or local machine')
     parser.add_argument('--debug_convnet', type=bool,
                     help='Convnet (for debugging)')
-    parser.add_argument('--batch_size', default=10, type=int,
+    parser.add_argument('--batch_size', default=7, type=int,
                         help='Per GPU batch size')
     parser.add_argument('--epochs', default=10000, type=int)
     parser.add_argument('--warmup_epochs', type=int, default=40, metavar='N',
                         help='epochs to warmup LR')
-    parser.add_argument('--update_freq', default=8, type=int,
+    parser.add_argument('--update_freq', default=1, type=int,
                         help='gradient accumulation step')
     parser.add_argument('--patch_size', default=32, type=int,
                         help='Patch size')
@@ -81,7 +81,7 @@ def get_args_parser():
     parser.add_argument('--decoder_embed_dim', type=int, default=512)
     
     # Optimizer parameters
-    parser.add_argument('--weight_decay', type=float, default=0.025,
+    parser.add_argument('--weight_decay', type=float, default=0.05,
                         help='weight decay (default: 0.05)')
     parser.add_argument('--lr', type=float, default=None, metavar='LR',
                         help='learning rate (absolute lr)')
