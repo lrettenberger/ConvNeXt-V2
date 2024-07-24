@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --partition=accelerated
-#SBATCH --time=48:00:00
-#SBATCH --nodes=3
+#SBATCH --time=24:00:00
+#SBATCH --nodes=10
 #SBATCH --ntasks-per-node=4
 #SBATCH --gres=gpu:4
 #SBATCH --mail-type=ALL
@@ -14,7 +14,8 @@
 ### change 5-digit MASTER_PORT as you wish, slurm will raise Error if duplicated with others
 ### change WORLD_SIZE as gpus/node * num_nodes
 export MASTER_PORT=12340
-export WORLD_SIZE=12
+# nodes*4
+export WORLD_SIZE=40
 
 ### get the first node name as master address - customized for vgg slurm
 ### e.g. master(gnodee[2-5],gnoded1) == gnodee2
@@ -28,11 +29,11 @@ echo "MASTER_ADDR="$MASTER_ADDR
 # remove all modules
 module purge
 # activate cuda
-module load devel/cuda/11.1
+module load devel/cuda/11.8
 # activate conda env
 source /home/hk-project-test-dl4pm/hgf_xda8301/miniconda3/etc/profile.d/conda.sh
 conda activate sem-segmentation
 # move to project dir
 cd /home/hk-project-test-dl4pm/hgf_xda8301/ConvNeXt-V2
 
-srun python main_pretrain.py --input_size=640 --mask_ratio=0.5 --patch_size=32 --data_path=/home/hk-project-test-dl4pm/hgf_xda8301/data/sem_segmentation_ssl --output_dir=/home/hk-project-test-dl4pm/hgf_xda8301/ConvNeXt-V2/last_horeka_ressources --pretraining=ssl --warmup_epochs=40
+srun python main_pretrain.py --input_size=640 --mask_ratio=0.5 --patch_size=32 --data_path=/home/hk-project-test-dl4pm/hgf_xda8301/data/sem_segmentation_ssl_smaller_subset --output_dir=/home/hk-project-test-dl4pm/hgf_xda8301/ConvNeXt-V2/sem_segmentation_ssl_smaller_subset --warmup_epochs=40
