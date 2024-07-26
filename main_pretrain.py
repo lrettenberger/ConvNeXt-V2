@@ -48,7 +48,7 @@ from utils import str2bool
 
 def get_args_parser():
     parser = argparse.ArgumentParser('FCMAE pre-training', add_help=False)
-    parser.add_argument('--horeka', type=bool,
+    parser.add_argument('--horeka', type=bool, default=True,
                     help='If training is on horeka or local machine')
     parser.add_argument('--debug_convnet', type=bool,
                     help='Convnet (for debugging)')
@@ -206,16 +206,17 @@ def main(args):
             norm_pix_loss=args.norm_pix_loss,
             patch_size=args.patch_size,
             sigmoid = args.sigmoid,
-            use_fpn = args.use_fpn
+            use_fpn = args.use_fpn,
+            model_size = args.model
         )
     model.to(device)
         
 
     model_without_ddp = model
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-    print("Model = %s" % str(model_without_ddp))
-    print('number of params:', n_parameters)
+    if utils.is_main_process():
+        print("Model = %s" % str(model_without_ddp))
+        print('number of params:', n_parameters)
 
     eff_batch_size = args.batch_size * args.update_freq * utils.get_world_size()
     num_training_steps_per_epoch = len(dataset_train) // eff_batch_size
@@ -341,9 +342,11 @@ def main(args):
                      **{f'{k}': v for k, v in val_stats.items()},
                     'epoch': epoch,
                     'n_parameters': n_parameters}
-        wandb.log({"epoch": epoch, "n_parameters": n_parameters})
-        wandb.log({f'train_{k}': v for k, v in train_stats.items()})
-        wandb.log({f'{k}': v for k, v in val_stats.items()})
+        
+        if utils.is_main_process():
+            wandb.log({"epoch": epoch, "n_parameters": n_parameters})
+            wandb.log({f'train_{k}': v for k, v in train_stats.items()})
+            wandb.log({f'{k}': v for k, v in val_stats.items()})
         if args.output_dir and utils.is_main_process():
             if log_writer is not None:
                 log_writer.flush()
@@ -366,11 +369,10 @@ if __name__ == '__main__':
         ngpus_per_node = torch.cuda.device_count()
     if distributed:
         rank = int(os.environ['SLURM_PROCID'])
-        print('device count')
-        print(torch.cuda.device_count())
         gpu = rank % torch.cuda.device_count()
         dist_backend = 'nccl'
         dist_url = 'env://'
+        print(f"SLURM_PROCID: {os.environ['SLURM_PROCID']} | Device Count: {torch.cuda.device_count()} | Rank: {rank} | World Size: {world_size}")
         dist.init_process_group(backend=dist_backend, init_method=dist_url, world_size=world_size, rank=rank)
     args = get_args_parser()
     args = args.parse_args()

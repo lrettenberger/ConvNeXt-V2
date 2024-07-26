@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --partition=accelerated
-#SBATCH --time=31:00:00
+#SBATCH --time=48:00:00
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:4
 #SBATCH --mail-type=ALL

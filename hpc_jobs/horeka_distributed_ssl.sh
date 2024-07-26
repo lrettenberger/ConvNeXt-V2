@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --partition=accelerated
-#SBATCH --time=24:00:00
-#SBATCH --nodes=10
+#SBATCH --time=48:00:00
+#SBATCH --nodes=45
 #SBATCH --ntasks-per-node=4
 #SBATCH --gres=gpu:4
 #SBATCH --mail-type=ALL
@@ -15,7 +15,8 @@
 ### change WORLD_SIZE as gpus/node * num_nodes
 export MASTER_PORT=12340
 # nodes*4
-export WORLD_SIZE=40
+#export WORLD_SIZE=160
+export WORLD_SIZE=180
 
 ### get the first node name as master address - customized for vgg slurm
 ### e.g. master(gnodee[2-5],gnoded1) == gnodee2
@@ -36,4 +37,4 @@ conda activate sem-segmentation
 # move to project dir
 cd /home/hk-project-test-dl4pm/hgf_xda8301/ConvNeXt-V2
 
-srun python main_pretrain.py --input_size=640 --mask_ratio=0.5 --patch_size=32 --data_path=/home/hk-project-test-dl4pm/hgf_xda8301/data/sem_segmentation_ssl_smaller_subset --output_dir=/home/hk-project-test-dl4pm/hgf_xda8301/ConvNeXt-V2/sem_segmentation_ssl_smaller_subset --warmup_epochs=40
+srun python main_pretrain.py --pretraining=ssl --input_size=640 --mask_ratio=0.5 --patch_size=32 --data_path=/home/hk-project-test-dl4pm/hgf_xda8301/data/sem_segmentation_ssl --output_dir=/home/hk-project-test-dl4pm/hgf_xda8301/ConvNeXt-V2/sem_segmentation_ssl_full_dataset_imagenet_pretrain --warmup_epochs=40

@@ -39,7 +39,7 @@ def val_epoch(
         metric_logger.update(val_loss=loss_value_reduce)
         torch.cuda.empty_cache()
     metric_logger.synchronize_between_processes()
-    print("Averaged stats:", metric_logger)
+    #print("Averaged stats:", metric_logger)
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
 def train_one_epoch(model: torch.nn.Module,
@@ -97,5 +97,5 @@ def train_one_epoch(model: torch.nn.Module,
             log_writer.update(lr=lr, head="opt", step=epoch_1000x)
     
     metric_logger.synchronize_between_processes()
-    print("Averaged stats:", metric_logger)
+    #print("Averaged stats:", metric_logger)
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
