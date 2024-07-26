@@ -9,6 +9,8 @@
 import torch
 import torch.nn as nn
 import wandb
+import math
+import utils
 from time import time
 import numpy as np
 from torchvision.ops.feature_pyramid_network import FeaturePyramidNetwork,LastLevelMaxPool
@@ -28,6 +30,7 @@ class FCMAE(nn.Module):
     """
     def __init__(
                 self,
+                model_size,
                 img_size=224,
                 in_chans=1,
                 depths=[3, 3, 9, 3],
@@ -38,7 +41,7 @@ class FCMAE(nn.Module):
                 mask_ratio=0.6,
                 norm_pix_loss=False,
                 use_fpn=False,
-                sigmoid = False
+                sigmoid = False,
         ):
         super().__init__()
         
@@ -64,7 +67,12 @@ class FCMAE(nn.Module):
             proj_input = 256
             pred_output = 16
         else:
-            proj_input=1024
+            if model_size == 'convnextv2_base':
+                proj_input=1024
+            if model_size == 'convnextv2_large':
+                proj_input=1536
+            if model_size == 'convnextv2_huge':
+                proj_input = 2816
             pred_output = patch_size ** 2
         self.encoder = SparseConvNeXtV2(
             patch_size=patch_size,in_chans=in_chans, depths=depths, dims=dims, D=2,use_fpn=use_fpn)
@@ -74,7 +82,8 @@ class FCMAE(nn.Module):
             out_channels=decoder_embed_dim, 
             kernel_size=1)
         # mask tokens
-        self.mask_token = nn.Parameter(torch.zeros(1, decoder_embed_dim, 1, 1))
+        self.mask_token = nn.Parameter(torch.rand(1, decoder_embed_dim, 1, 1))
+        torch.nn.init.normal_(self.mask_token, std=.01)
         decoder = [Block(
             dim=decoder_embed_dim, 
             drop_path=0.) for i in range(decoder_depth)]
@@ -87,24 +96,15 @@ class FCMAE(nn.Module):
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
-        if isinstance(m, MinkowskiConvolution):
-            trunc_normal_(m.kernel, std=.02)
-            nn.init.constant_(m.bias, 0)
-        if isinstance(m, MinkowskiDepthwiseConvolution):
-            trunc_normal_(m.kernel)
-            nn.init.constant_(m.bias, 0)
-        if isinstance(m, MinkowskiLinear):
-            trunc_normal_(m.linear.weight)
-            nn.init.constant_(m.linear.bias, 0)
-        if isinstance(m, nn.Conv2d):
-            w = m.weight.data
-            trunc_normal_(w.view([w.shape[0], -1]))
-            nn.init.constant_(m.bias, 0)
-        if isinstance(m, nn.LayerNorm):
-            nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)
-        if hasattr(self, 'mask_token'):    
-            torch.nn.init.normal_(self.mask_token, std=.02)
+        if isinstance(m, MinkowskiConvolution) or isinstance(m, MinkowskiDepthwiseConvolution):
+            # trunc_normal_(m.kernel, std=.02)
+            # nn.init.constant_(m.bias, 0)
+            with torch.no_grad():
+                n = (m.in_channels) * m.kernel_generator.kernel_volume
+                stdv = 1.0 / math.sqrt(n)
+                m.kernel.data.uniform_(-stdv, stdv)
+                if m.bias is not None:
+                    m.bias.data.uniform_(-stdv, stdv)
     
     def patchify(self, imgs,p=None):
         """
@@ -221,7 +221,7 @@ class FCMAE(nn.Module):
             target = self.patchify(imgs,p=4)
         else:
             target = self.patchify(imgs)
-        if time()-self.time_since_last_img_save > 10800: # 3600
+        if time()-self.time_since_last_img_save > 900 and utils.is_main_process():
             unpatch_factor = None
             upsample_factor = 32
             if self.use_fpn:

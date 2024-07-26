@@ -7,6 +7,7 @@
 
 
 import torch
+import math
 import torch.nn as nn
 from timm.models.layers import trunc_normal_
 
@@ -115,17 +116,17 @@ class SparseConvNeXtV2(nn.Module):
         self.use_fpn = use_fpn
 
         self.apply(self._init_weights)# init weights fuer fpn
-        
+      
     def _init_weights(self, m):
-        if isinstance(m, MinkowskiConvolution):
-            trunc_normal_(m.kernel, std=.02)
-            nn.init.constant_(m.bias, 0)
-        if isinstance(m, MinkowskiDepthwiseConvolution):
-            trunc_normal_(m.kernel, std=.02)
-            nn.init.constant_(m.bias, 0)
-        if isinstance(m, MinkowskiLinear):
-            trunc_normal_(m.linear.weight, std=.02)
-            nn.init.constant_(m.linear.bias, 0)
+        if isinstance(m, MinkowskiConvolution) or isinstance(m, MinkowskiDepthwiseConvolution):
+            # trunc_normal_(m.kernel, std=.02)
+            # nn.init.constant_(m.bias, 0)
+            with torch.no_grad():
+                n = (m.in_channels) * m.kernel_generator.kernel_volume
+                stdv = 1.0 / math.sqrt(n)
+                m.kernel.data.uniform_(-stdv, stdv)
+                if m.bias is not None:
+                    m.bias.data.uniform_(-stdv, stdv)
 
     def upsample_mask(self, mask, scale):
         assert len(mask.shape) == 2
