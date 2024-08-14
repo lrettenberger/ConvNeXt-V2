@@ -11,7 +11,11 @@ import torch.nn as nn
 import wandb
 import math
 import utils
+from pathlib import Path
+import matplotlib.pyplot as plt
+from glob import glob
 from time import time
+import cv2
 import numpy as np
 from torchvision.ops.feature_pyramid_network import FeaturePyramidNetwork,LastLevelMaxPool
 
@@ -31,6 +35,7 @@ class FCMAE(nn.Module):
     def __init__(
                 self,
                 model_size,
+                output_dir=None,
                 img_size=224,
                 in_chans=1,
                 depths=[3, 3, 9, 3],
@@ -49,6 +54,11 @@ class FCMAE(nn.Module):
         assert (img_size % patch_size == 0), "Patch size must fit image size."
 
         # configs
+        if output_dir:
+            self.training_imgs_dir = f'{output_dir}/train_imgs'
+        else:
+            self.training_imgs_dir = 'train_imgs'
+        Path(self.training_imgs_dir).mkdir(parents=True,exist_ok=True)
         self.img_size = img_size
         self.time_since_last_img_save = time()
         self.depths = depths
@@ -67,6 +77,16 @@ class FCMAE(nn.Module):
             proj_input = 256
             pred_output = 16
         else:
+            if model_size == 'convnextv2_atto':
+                proj_input=320
+            if model_size == 'convnextv2_femto':
+                proj_input=384
+            if model_size == 'convnextv2_pico':
+                proj_input=512
+            if model_size == 'convnextv2_nano':
+                proj_input=640
+            if model_size == 'convnextv2_tiny':
+                proj_input=768
             if model_size == 'convnextv2_base':
                 proj_input=1024
             if model_size == 'convnextv2_large':
@@ -200,6 +220,15 @@ class FCMAE(nn.Module):
         combined_image[:,:y,:] = target_img
         combined_image[:,y:y*2,:] = pred_img
         combined_image[:,y*2:,:] = combined_img
+        print(combined_image.shape)
+        try:
+            existing_imgs = [int(x.split('/')[-1].split('.png')[0]) for x in glob(f'{self.training_imgs_dir}/*.png')]
+            max_num = 0
+            if len(existing_imgs)>0:
+                max_num = max(existing_imgs)
+            cv2.imwrite(f'{self.training_imgs_dir}/{max_num+1}.png',combined_image*255)
+        except Exception as e:
+            print(f'Saving did not work: {e}')
         images = wandb.Image(
             combined_image, 
             caption="Left: Target, Middle: Pred, Right: Combined"

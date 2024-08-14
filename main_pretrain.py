@@ -54,7 +54,7 @@ def get_args_parser():
                     help='Convnet (for debugging)')
     parser.add_argument('--batch_size', default=7, type=int,
                         help='Per GPU batch size')
-    parser.add_argument('--epochs', default=10000, type=int)
+    parser.add_argument('--epochs', default=20000, type=int)
     parser.add_argument('--warmup_epochs', type=int, default=40, metavar='N',
                         help='epochs to warmup LR')
     parser.add_argument('--update_freq', default=1, type=int,
@@ -110,7 +110,7 @@ def get_args_parser():
 
     parser.add_argument('--start_epoch', default=0, type=int, metavar='N',
                         help='start epoch')
-    parser.add_argument('--num_workers', default=10, type=int)
+    parser.add_argument('--num_workers', default=0, type=int)
     parser.add_argument('--pin_mem', type=str2bool, default=True,
                         help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
     
@@ -127,7 +127,8 @@ def get_args_parser():
     return parser
 
 def main(args):
-    print(args)
+    if utils.is_main_process():
+        print(args)
     device = torch.device(args.device)
 
     # fix the seed for reproducibility
@@ -162,12 +163,14 @@ def main(args):
     sampler_train = torch.utils.data.DistributedSampler(
         dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True, seed=args.seed,
     )
-    print("Sampler_train = %s" % str(sampler_train))
+    if utils.is_main_process():
+        print("Sampler_train = %s" % str(sampler_train))
     
     sampler_val = torch.utils.data.DistributedSampler(
         dataset_val, num_replicas=num_tasks, rank=global_rank, shuffle=False, seed=args.seed,
     )
-    print("Sampler_val = %s" % str(sampler_val))
+    if utils.is_main_process():
+        print("Sampler_val = %s" % str(sampler_val))
 
     if global_rank == 0 and args.log_dir is not None:
         os.makedirs(args.log_dir, exist_ok=True)
@@ -200,6 +203,7 @@ def main(args):
     else:
         model = fcmae.__dict__[args.model](
             mask_ratio=args.mask_ratio,
+            output_dir=args.output_dir,
             img_size=args.input_size,
             decoder_depth=args.decoder_depth,
             decoder_embed_dim=args.decoder_embed_dim,
@@ -223,12 +227,12 @@ def main(args):
 
     if args.lr is None:
         args.lr = args.blr * eff_batch_size / 256
-        
-    print("base lr: %.2e" % (args.lr * 256 / eff_batch_size))
-    print("actual lr: %.2e" % args.lr)
+    if utils.is_main_process(): 
+        print("base lr: %.2e" % (args.lr * 256 / eff_batch_size))
+        print("actual lr: %.2e" % args.lr)
 
-    print("accumulate grad iterations: %d" % args.update_freq)
-    print("effective batch size: %d" % eff_batch_size)
+        print("accumulate grad iterations: %d" % args.update_freq)
+        print("effective batch size: %d" % eff_batch_size)
 
 
     args.output_dir = f'{args.output_dir}/img_size_{args.input_size}_lr_{args.blr}_mask_ammount_{args.mask_ratio}_sigmoid_{args.sigmoid}_pretraining_{args.pretraining}'
@@ -236,8 +240,9 @@ def main(args):
 
     run = wandb.init(
         project="sem-segmentation-convnextv2",
-        mode="online",
+        mode="offline",
         group=datetime.now().strftime("%Y/%d/%m/%H/%M"),
+        settings=wandb.Settings(_disable_stats=True),
         config={
             "input_size": args.input_size,
             "model": args.model,
@@ -254,10 +259,9 @@ def main(args):
         }
     )
     run.name = f'img_size_{args.input_size}_lr_{args.blr}_mask_ammount_{args.mask_ratio}_sigmoid_{args.sigmoid}_pretraining_{args.pretraining}'
-    run.save()
     
     if hasattr(args,'distributed'):
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=True)
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=False)
         model_without_ddp = model.module
 
     param_groups = add_weight_decay(model_without_ddp, args.weight_decay)
@@ -283,7 +287,8 @@ def main(args):
         preloaded_weights['encoder.downsample_layers.0.0.weight'] = torch.mean(preloaded_weights['encoder.downsample_layers.0.0.weight'],dim=1).unsqueeze(1)
         model.load_state_dict(preloaded_weights,strict=False)     
 
-    print(f"Start training for {args.epochs} epochs")
+    if utils.is_main_process():
+        print(f"Start training for {args.epochs} epochs")
     
     # load existing top 5 val losses if they are present
     top_5_losses = []
@@ -311,37 +316,39 @@ def main(args):
             args
         )
         val_loss = val_stats['val_loss']
-        # Update top_5_losses
-        if len(top_5_losses) < 5:
-            checkpoint_path = utils.save_model_val_loss(args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
-                                                        loss_scaler=loss_scaler, epoch=epoch,val_loss=val_loss)
-            top_5_losses.append((epoch, val_loss,checkpoint_path))
-            top_5_losses.sort(key=lambda x: x[1], reverse=True)
-        else:
-            if val_loss < top_5_losses[0][1]:
-                checkpoint_path = utils.save_model_val_loss(args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
-                                                            loss_scaler=loss_scaler, epoch=epoch,val_loss=val_loss)
-                if os.path.exists(top_5_losses[0][2]):
-                    try:
-                        os.remove(top_5_losses[0][2])
-                    except FileNotFoundError:
-                        print('File not found for deletion woopsi!')
-                top_5_losses[0] = (epoch, val_loss,checkpoint_path)
-                top_5_losses.sort(key=lambda x: x[1], reverse=True)
-        if args.output_dir and args.save_ckpt:
-            if (epoch + 1) % args.save_ckpt_freq == 0 or epoch + 1 == args.epochs:
-                utils.save_model(
-                    args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
-                    loss_scaler=loss_scaler, epoch=epoch)
-            if (epoch + 1) % 250 == 0:
-                # save every 250 epochs
-                utils.save_model_intermediate(
-                    args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
-                    loss_scaler=loss_scaler, epoch=epoch)
-        log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
-                     **{f'{k}': v for k, v in val_stats.items()},
-                    'epoch': epoch,
-                    'n_parameters': n_parameters}
+        if  utils.is_main_process():
+            # Update top_5_losses but only when training properly started and on main node
+            if epoch > 40:
+                if len(top_5_losses) < 5:
+                    checkpoint_path = utils.save_model_val_loss(args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
+                                                                loss_scaler=loss_scaler, epoch=epoch,val_loss=val_loss)
+                    top_5_losses.append((epoch, val_loss,checkpoint_path))
+                    top_5_losses.sort(key=lambda x: x[1], reverse=True)
+                else:
+                    if val_loss < top_5_losses[0][1]:
+                        checkpoint_path = utils.save_model_val_loss(args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
+                                                                    loss_scaler=loss_scaler, epoch=epoch,val_loss=val_loss)
+                        if os.path.exists(top_5_losses[0][2]):
+                            try:
+                                os.remove(top_5_losses[0][2])
+                            except FileNotFoundError:
+                                pass
+                        top_5_losses[0] = (epoch, val_loss,checkpoint_path)
+                        top_5_losses.sort(key=lambda x: x[1], reverse=True)
+            if args.output_dir and args.save_ckpt:
+                if (epoch + 1) % args.save_ckpt_freq == 0 or epoch + 1 == args.epochs:
+                    utils.save_model(
+                        args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
+                        loss_scaler=loss_scaler, epoch=epoch)
+                if (epoch + 1) % 250 == 0:
+                    # save every 250 epochs
+                    utils.save_model_intermediate(
+                        args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
+                        loss_scaler=loss_scaler, epoch=epoch)
+            log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
+                        **{f'{k}': v for k, v in val_stats.items()},
+                        'epoch': epoch,
+                        'n_parameters': n_parameters}
         
         if utils.is_main_process():
             wandb.log({"epoch": epoch, "n_parameters": n_parameters})
@@ -352,10 +359,6 @@ def main(args):
                 log_writer.flush()
             with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
                 f.write(json.dumps(log_stats) + "\n")
-    
-    total_time = time.time() - start_time
-    total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-    print('Training time {}'.format(total_time_str))
     wandb.finish()
 
 
@@ -372,7 +375,7 @@ if __name__ == '__main__':
         gpu = rank % torch.cuda.device_count()
         dist_backend = 'nccl'
         dist_url = 'env://'
-        print(f"SLURM_PROCID: {os.environ['SLURM_PROCID']} | Device Count: {torch.cuda.device_count()} | Rank: {rank} | World Size: {world_size}")
+        #print(f"SLURM_PROCID: {os.environ['SLURM_PROCID']} | Device Count: {torch.cuda.device_count()} | Rank: {rank} | World Size: {world_size}")
         dist.init_process_group(backend=dist_backend, init_method=dist_url, world_size=world_size, rank=rank)
     args = get_args_parser()
     args = args.parse_args()

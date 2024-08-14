@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --partition=accelerated
 #SBATCH --time=48:00:00
-#SBATCH --nodes=45
+#SBATCH --nodes=30
 #SBATCH --ntasks-per-node=4
 #SBATCH --gres=gpu:4
 #SBATCH --mail-type=ALL
@@ -15,8 +15,7 @@
 ### change WORLD_SIZE as gpus/node * num_nodes
 export MASTER_PORT=12340
 # nodes*4
-#export WORLD_SIZE=160
-export WORLD_SIZE=180
+export WORLD_SIZE=120
 
 ### get the first node name as master address - customized for vgg slurm
 ### e.g. master(gnodee[2-5],gnoded1) == gnodee2
@@ -37,4 +36,4 @@ conda activate sem-segmentation
 # move to project dir
 cd /home/hk-project-test-dl4pm/hgf_xda8301/ConvNeXt-V2
 
-srun python main_pretrain.py --pretraining=ssl --input_size=640 --mask_ratio=0.5 --patch_size=32 --data_path=/home/hk-project-test-dl4pm/hgf_xda8301/data/sem_segmentation_ssl --output_dir=/home/hk-project-test-dl4pm/hgf_xda8301/ConvNeXt-V2/sem_segmentation_ssl_full_dataset_imagenet_pretrain --warmup_epochs=40
+srun python main_pretrain.py --warmup_epochs=0 --resume=/home/hk-project-test-dl4pm/hgf_xda8301/ConvNeXt-V2/sem_segmentation_no_pretraining_bigger_lr_30_nodes/img_size_640_lr_0.00045_mask_ammount_0.5_sigmoid_False_pretraining_None/checkpoint-7999.pth --blr=4.5e-4 --input_size=640 --mask_ratio=0.5 --patch_size=32 --data_path=/home/hk-project-test-dl4pm/hgf_xda8301/data/sem_segmentation_ssl --output_dir=/home/hk-project-test-dl4pm/hgf_xda8301/ConvNeXt-V2/sem_segmentation_no_pretraining_bigger_lr_30_nodes_continue

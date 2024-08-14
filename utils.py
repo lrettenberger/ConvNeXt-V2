@@ -526,7 +526,8 @@ def auto_load_model(args, model, model_without_ddp, optimizer, loss_scaler, mode
                 latest_ckpt = max(int(t), latest_ckpt)
         if latest_ckpt >= 0:
             args.resume = os.path.join(output_dir, 'checkpoint-%d.pth' % latest_ckpt)
-        print("Auto resume checkpoint: %s" % args.resume)
+        if is_main_process():
+            print("Auto resume checkpoint: %s" % args.resume)
 
     if args.resume:
         if args.resume.startswith('https'):
