@@ -8,12 +8,18 @@
 
 ## PyTorch
 
+convnextv2_*/
+sem_segmentation_*/
+
 last_horeka_ressources/
 
 ssl_trainings/
 pretrained_online/
 ssl_over_holidays/
 big_dataset/
+sem_segmentation_ssl_smaller_subset/
+sem_segmentation_ssl_smaller_subset_imagenet_pretrain/
+ssl_pretrain/
 
 wandb/
 

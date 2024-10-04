@@ -8,14 +8,13 @@
 
 import argparse
 import wandb
-import datetime
 from pathlib import Path
 import numpy as np
 import time
 import json
+import datetime
 import os
 from pathlib import Path
-from datetime import datetime
 
 import torch
 import torch.distributed as dist
@@ -54,7 +53,7 @@ def get_args_parser():
                     help='Convnet (for debugging)')
     parser.add_argument('--batch_size', default=7, type=int,
                         help='Per GPU batch size')
-    parser.add_argument('--epochs', default=20000, type=int)
+    parser.add_argument('--epochs', default=15000, type=int)
     parser.add_argument('--warmup_epochs', type=int, default=40, metavar='N',
                         help='epochs to warmup LR')
     parser.add_argument('--update_freq', default=1, type=int,
@@ -241,7 +240,7 @@ def main(args):
     run = wandb.init(
         project="sem-segmentation-convnextv2",
         mode="offline",
-        group=datetime.now().strftime("%Y/%d/%m/%H/%M"),
+        group=datetime.datetime.now().strftime("%Y/%d/%m/%H/%M"),
         settings=wandb.Settings(_disable_stats=True),
         config={
             "input_size": args.input_size,
@@ -365,6 +364,7 @@ def main(args):
 if __name__ == '__main__':
     
     # distributeeeed
+    print('started')
     distributed=False
     if "WORLD_SIZE" in os.environ:
         world_size = int(os.environ["WORLD_SIZE"])
@@ -374,9 +374,12 @@ if __name__ == '__main__':
         rank = int(os.environ['SLURM_PROCID'])
         gpu = rank % torch.cuda.device_count()
         dist_backend = 'nccl'
+        #dist_backend= 'gloo'
         dist_url = 'env://'
-        #print(f"SLURM_PROCID: {os.environ['SLURM_PROCID']} | Device Count: {torch.cuda.device_count()} | Rank: {rank} | World Size: {world_size}")
-        dist.init_process_group(backend=dist_backend, init_method=dist_url, world_size=world_size, rank=rank)
+        print(f"SLURM_PROCID: {os.environ['SLURM_PROCID']} | Device Count: {torch.cuda.device_count()} | Rank: {rank} | World Size: {world_size}")
+        # set timeout to three hours
+        dist.init_process_group(backend=dist_backend, init_method=dist_url, world_size=world_size, rank=rank, timeout=datetime.timedelta(seconds=3600*3))
+        print('DONE')
     args = get_args_parser()
     args = args.parse_args()
     if args.output_dir:
